@@ -132,6 +132,7 @@ public class ArrayList<E> extends AbstractList<E>
      * empty ArrayList with elementData == DEFAULTCAPACITY_EMPTY_ELEMENTDATA
      * will be expanded to DEFAULT_CAPACITY when the first element is added.
      */
+    // 实际保存元素的数组。
     transient Object[] elementData; // non-private to simplify nested class access
 
     /**
@@ -148,10 +149,13 @@ public class ArrayList<E> extends AbstractList<E>
      * @throws IllegalArgumentException if the specified initial capacity
      *         is negative
      */
+     // 创建指定容量的空数组。
     public ArrayList(int initialCapacity) {
         if (initialCapacity > 0) {
+            // 给定初始容量不为0，创建指定容量的空数组。
             this.elementData = new Object[initialCapacity];
         } else if (initialCapacity == 0) {
+            // 给定初始容量为0，创建空数组。
             this.elementData = EMPTY_ELEMENTDATA;
         } else {
             throw new IllegalArgumentException("Illegal Capacity: "+
@@ -163,6 +167,7 @@ public class ArrayList<E> extends AbstractList<E>
      * Constructs an empty list with an initial capacity of ten.
      */
     public ArrayList() {
+        // 创建空数组，此时 ArrayList 对象默认的 capacity = 10。
         this.elementData = DEFAULTCAPACITY_EMPTY_ELEMENTDATA;
     }
 
@@ -175,13 +180,18 @@ public class ArrayList<E> extends AbstractList<E>
      * @throws NullPointerException if the specified collection is null
      */
     public ArrayList(Collection<? extends E> c) {
+        // 创建新的数组返回给 elementData。
         elementData = c.toArray();
+        // 判断新数组是否为空。
         if ((size = elementData.length) != 0) {
             // c.toArray might (incorrectly) not return Object[] (see 6260652)
+            // 新数组不为空，再判断新数组是不是 Object 类型
             if (elementData.getClass() != Object[].class)
+                // 如果不是，创建 Object 类型数组，将元素一一复制,最后返回。
                 elementData = Arrays.copyOf(elementData, size, Object[].class);
         } else {
             // replace with empty array.
+            // 新数组为空，赋空数组返回。
             this.elementData = EMPTY_ELEMENTDATA;
         }
     }
