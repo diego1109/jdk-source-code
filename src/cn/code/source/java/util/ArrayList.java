@@ -140,6 +140,7 @@ public class ArrayList<E> extends AbstractList<E>
      *
      * @serial
      */
+    // 列表中元素的个数。
     private int size;
 
     /**
@@ -230,22 +231,30 @@ public class ArrayList<E> extends AbstractList<E>
         }
     }
 
+    // 计算需要的最小容量。minCapacity == 当前数组元素个数 + 要添加的元素的个数。
     private static int calculateCapacity(Object[] elementData, int minCapacity) {
+        // 如果数组为空，(第一次 add 元素时才会触发)
         if (elementData == DEFAULTCAPACITY_EMPTY_ELEMENTDATA) {
+            // 返回 默认容量 和 minCapacity 中最大的。
             return Math.max(DEFAULT_CAPACITY, minCapacity);
         }
+        // 非第一次 add 时，直接返回 minCapacity。
         return minCapacity;
     }
 
     private void ensureCapacityInternal(int minCapacity) {
+        // 1.先计算出所需的最小容量。
+        // 2.确认最小容量，并执行扩容。
         ensureExplicitCapacity(calculateCapacity(elementData, minCapacity));
     }
 
+    //  确定最终的容量，需不需要扩容。
     private void ensureExplicitCapacity(int minCapacity) {
         modCount++;
 
         // overflow-conscious code
         if (minCapacity - elementData.length > 0)
+            // 当需要的最小容量 > 当前数组的长度时， 执行扩容。
             grow(minCapacity);
     }
 
@@ -263,21 +272,30 @@ public class ArrayList<E> extends AbstractList<E>
      *
      * @param minCapacity the desired minimum capacity
      */
+    // 执行扩容。
     private void grow(int minCapacity) {
         // overflow-conscious code
+        // 当前数组的长度。
         int oldCapacity = elementData.length;
+        // 扩容到数组长度的 1.5 倍
         int newCapacity = oldCapacity + (oldCapacity >> 1);
+        // 如果扩容后的容量还小于所需的最小容量，那就以最小容量为准（再扩大）。
         if (newCapacity - minCapacity < 0)
             newCapacity = minCapacity;
+        // 再判断，如果新容量是个很大的数子，快逼近 int 的极限的了，
+        // 那就直接将新容量扩大到 int 的极限（如果新容量没有溢出）。
         if (newCapacity - MAX_ARRAY_SIZE > 0)
             newCapacity = hugeCapacity(minCapacity);
         // minCapacity is usually close to size, so this is a win:
+        // 以新容量为长度创建新数组，并将老数组中的元素一一复制到新数组。
         elementData = Arrays.copyOf(elementData, newCapacity);
     }
 
     private static int hugeCapacity(int minCapacity) {
+        // 如果容量超 int 范围了，报异常。
         if (minCapacity < 0) // overflow
             throw new OutOfMemoryError();
+        // 三段式，确定最终容量。
         return (minCapacity > MAX_ARRAY_SIZE) ?
             Integer.MAX_VALUE :
             MAX_ARRAY_SIZE;
@@ -310,7 +328,9 @@ public class ArrayList<E> extends AbstractList<E>
      * @param o element whose presence in this list is to be tested
      * @return <tt>true</tt> if this list contains the specified element
      */
+    // 列表是否包含某个对象。o 可以为null，而且回去列表中找有没有 null。
     public boolean contains(Object o) {
+        // 查找 o 在列表中的 index，如果 index > 0, 则表示包含。
         return indexOf(o) >= 0;
     }
 
@@ -321,16 +341,22 @@ public class ArrayList<E> extends AbstractList<E>
      * <tt>(o==null&nbsp;?&nbsp;get(i)==null&nbsp;:&nbsp;o.equals(get(i)))</tt>,
      * or -1 if there is no such index.
      */
+    // 在列表中查找目标对象的索引。
     public int indexOf(Object o) {
         if (o == null) {
+            // 遍历列表找 null。
             for (int i = 0; i < size; i++)
                 if (elementData[i]==null)
+                    // 找到了，返回索引。
                     return i;
         } else {
+            // 遍历列表找非 null 对象。
             for (int i = 0; i < size; i++)
                 if (o.equals(elementData[i]))
+                     // 找到了，返回索引。
                     return i;
         }
+        // 没找打，返回 -1.
         return -1;
     }
 
@@ -454,11 +480,15 @@ public class ArrayList<E> extends AbstractList<E>
      * @return the element previously at the specified position
      * @throws IndexOutOfBoundsException {@inheritDoc}
      */
+    // 修改 index 位置的元素。
     public E set(int index, E element) {
+        // 检查越界。
         rangeCheck(index);
-
+        // 拿出 index 位置处的元素。
         E oldValue = elementData(index);
+        // 用给定元素代替老元素。
         elementData[index] = element;
+        // 返回老元素。
         return oldValue;
     }
 
@@ -468,8 +498,11 @@ public class ArrayList<E> extends AbstractList<E>
      * @param e element to be appended to this list
      * @return <tt>true</tt> (as specified by {@link Collection#add})
      */
+    // 向列表中追加元素。
     public boolean add(E e) {
+        // size+1 表示最小容量。最小容量 == 当前列表中元素个数+1。
         ensureCapacityInternal(size + 1);  // Increments modCount!!
+        // 到这里已经扩容结束了。将新元素追加到数组。
         elementData[size++] = e;
         return true;
     }
@@ -483,13 +516,18 @@ public class ArrayList<E> extends AbstractList<E>
      * @param element element to be inserted
      * @throws IndexOutOfBoundsException {@inheritDoc}
      */
+    // 在指定索引出插入元素。
     public void add(int index, E element) {
+        // 检查是否越界。
         rangeCheckForAdd(index);
-
+        // 扩容。
         ensureCapacityInternal(size + 1);  // Increments modCount!!
+        // 将 index 位置以及后面的元素，向后移动 1 为。
         System.arraycopy(elementData, index, elementData, index + 1,
                          size - index);
+        // 在指定位置插入元素。
         elementData[index] = element;
+        // 列表中元素个数 + 1。
         size++;
     }
 
@@ -564,13 +602,14 @@ public class ArrayList<E> extends AbstractList<E>
      * Removes all of the elements from this list.  The list will
      * be empty after this call returns.
      */
+    // 清空列表。
     public void clear() {
         modCount++;
-
+        // 遍历列表，将数组中的每个引用都置空。
         // clear to let GC do its work
         for (int i = 0; i < size; i++)
             elementData[i] = null;
-
+        // 列表 size 归零。
         size = 0;
     }
 
@@ -587,11 +626,18 @@ public class ArrayList<E> extends AbstractList<E>
      * @return <tt>true</tt> if this list changed as a result of the call
      * @throws NullPointerException if the specified collection is null
      */
+    // 向列表中追加一个list。
     public boolean addAll(Collection<? extends E> c) {
+        // 拿出 list 中元素保存到数组中。
         Object[] a = c.toArray();
+        // 获取追加的元素个数。
         int numNew = a.length;
+        // 给原本的 elementData 扩容。
         ensureCapacityInternal(size + numNew);  // Increments modCount
+        // 将 a 数组中的元素从 0 开始，依次复制到 elementData 的 size 位置开始，并往后推
+        // 总共复制 numNew 个。
         System.arraycopy(a, 0, elementData, size, numNew);
+        // 更新列表长度。
         size += numNew;
         return numNew != 0;
     }
@@ -611,19 +657,26 @@ public class ArrayList<E> extends AbstractList<E>
      * @throws IndexOutOfBoundsException {@inheritDoc}
      * @throws NullPointerException if the specified collection is null
      */
+    // 在指定索引出插入一个集合。
     public boolean addAll(int index, Collection<? extends E> c) {
+        // 检查索引是否越界。
         rangeCheckForAdd(index);
-
+        // 集合里的元素保存到数组中。
         Object[] a = c.toArray();
+        // 数组长度。
         int numNew = a.length;
+        // 扩容。
         ensureCapacityInternal(size + numNew);  // Increments modCount
-
+        // 原数组中要向后移动的元素的个数。
         int numMoved = size - index;
+        // 如果向后移动的元素的个数大于 0。
         if (numMoved > 0)
+            // index 位置开始向后，总共 numMoved 元素，均向后移动 numNew 的距离。
             System.arraycopy(elementData, index, elementData, index + numNew,
                              numMoved);
-
+        // 将 a 中的元素从 elementData 的 index 位置开始，其次复制到 elementData 中。
         System.arraycopy(a, 0, elementData, index, numNew);
+        // 列表中总元素个数更新。
         size += numNew;
         return numNew != 0;
     }
@@ -1084,17 +1137,22 @@ public class ArrayList<E> extends AbstractList<E>
             this.size -= toIndex - fromIndex;
         }
 
+        // 向列表中添加一个list。
         public boolean addAll(Collection<? extends E> c) {
             return addAll(this.size, c);
         }
-
+        // 向指定索引处追加一个 list。
         public boolean addAll(int index, Collection<? extends E> c) {
+            // 判断是否越界。
             rangeCheckForAdd(index);
+            // 获取追加 list 的 size。
             int cSize = c.size();
+            // 追加的是空列表，直接返回。
             if (cSize==0)
                 return false;
-
+            // 并发检查，与追加逻辑无关。
             checkForComodification();
+            //
             parent.addAll(parentOffset + index, c);
             this.modCount = parent.modCount;
             this.size += cSize;
