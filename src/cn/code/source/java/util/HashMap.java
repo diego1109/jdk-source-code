@@ -493,7 +493,7 @@ public class HashMap<K,V> extends AbstractMap<K,V>
                                                loadFactor);
         // 设置负载因子。
         this.loadFactor = loadFactor;
-        // 计算并设定容量。
+        // 计算并设定阈值。
         this.threshold = tableSizeFor(initialCapacity);
     }
 
@@ -764,58 +764,115 @@ public class HashMap<K,V> extends AbstractMap<K,V>
      *
      * @return the table
      */
+    // 扩容主要做了三件事情：
+    // 1. 扩大容量，
+    // 2. 扩大阈值，
+    // 3. 重新分布散列表中的元素。
     final Node<K,V>[] resize() {
+        // 扩容前的 table。
         Node<K,V>[] oldTab = table;
+        // 扩容前的容量(当前容量)，再具体点：扩容前 table 数组的长度。
         int oldCap = (oldTab == null) ? 0 : oldTab.length;
+        // 扩容前的阈值(当前阈值)。
         int oldThr = threshold;
+        // newCap: 扩容后的容量(新容量)，扩容后 table 数组的长度。
+        // newThr: 下一次扩容的阈值(新阈值)。
         int newCap, newThr = 0;
+        // 如果散列表非空，即：table != null,(正常 put 键值对时，会触发这里)。
         if (oldCap > 0) {
+            // 如果当前容量已经是极限了(2^30次幂)，阈值设置为 int 最大值。
             if (oldCap >= MAXIMUM_CAPACITY) {
                 threshold = Integer.MAX_VALUE;
+                // 直接返回散列表，(因为散列表长度已经是极限了，不再扩大，
+                // 所以里面的元素不需要重新分布)。
                 return oldTab;
             }
+            // 如果散列表容量没达到极限。
+            // 1) 如果 老容量扩大两倍后依旧没有超上限，则：新容量 = 老容量 * 2。
+            // 2) 如果 老容量 >= 默认容量(16)，则：下次扩容阈值 = 当前扩容的阈值 * 2
             else if ((newCap = oldCap << 1) < MAXIMUM_CAPACITY &&
                      oldCap >= DEFAULT_INITIAL_CAPACITY)
                 newThr = oldThr << 1; // double threshold
         }
+        // 能到这里，说明此时散列表是空的。
+        // table == null，oldThr > 0，什么情况会出现？
+        // 1) 调用构造函数 HashMap(initialCapacity,loadFactor) 会出现；
+        // 2) 调用构造函数 HashMap(int initialCapacity) 时会出现；
+        // 3) 调用构造函数 HashMap(Map<? extends K, ? extends V> m) 时会出现。
         else if (oldThr > 0) // initial capacity was placed in threshold
+            // 这种场景下，直接设定 扩容后的 table 长度为阈值的大小。
             newCap = oldThr;
+        // 能到这里，说明此时，table == null，oldThr == 0
+        // 调用无参构造函数 HashMap()时会出现。
         else {               // zero initial threshold signifies using defaults
+            // 新容量采用默认的初始容量，大小是 16。
             newCap = DEFAULT_INITIAL_CAPACITY;
+            // 下次扩容阈值 = 负载因子 * 默认初始容量 = 0.75 * 16 = 12。
             newThr = (int)(DEFAULT_LOAD_FACTOR * DEFAULT_INITIAL_CAPACITY);
         }
+        // 什么情况下会出现？
+        // 1) table != null 且 table.length < 16 时，会出现 newThr == 0。
+        // 2) table == null 且 oldThr > 0 时，会出现 newThr == 0。
+        // 所以在还要为这两种情况设定下一次扩容的阈值。
         if (newThr == 0) {
+            // ft = 新容量 * 负载因子(默认是0.75)
             float ft = (float)newCap * loadFactor;
+            // 上限判断，如果没有超上限，那下一次扩容的阈值就是 ft。(一般不会超)
             newThr = (newCap < MAXIMUM_CAPACITY && ft < (float)MAXIMUM_CAPACITY ?
                       (int)ft : Integer.MAX_VALUE);
         }
+        // 下一次扩容的阈值定了，那就将其赋值给成员变量。
         threshold = newThr;
+        // 以新容量位长度，创建table。
         @SuppressWarnings({"rawtypes","unchecked"})
             Node<K,V>[] newTab = (Node<K,V>[])new Node[newCap];
         table = newTab;
+        // 如果 oldTable != null，说明这不是第一次插入数据，
+        // 那还得想原先 table 中的元素“移动”到新 table中。
         if (oldTab != null) {
+            // 遍历 oldCap
             for (int j = 0; j < oldCap; ++j) {
                 Node<K,V> e;
+                // 如果 j 位置出元素不为空，将该元素赋给临时变量 e。
                 if ((e = oldTab[j]) != null) {
+                    // oldTab 中该位置设置null，
                     oldTab[j] = null;
+                    // 如果 e.next == null, 说明 j 位置处只有一个node。
                     if (e.next == null)
+                        // 计算该 node 在新 table 中的索引，直接赋值。
                         newTab[e.hash & (newCap - 1)] = e;
+                    // 到这里，说明 j 位置不只一个 node。
+                    // 那这个位置可能是链表，可能是红黑树。得分开考虑。
                     else if (e instanceof TreeNode)
+                        // j 位置是红黑树。
                         ((TreeNode<K,V>)e).split(this, newTab, j, oldCap);
                     else { // preserve order
+                        // j 位置是链表。
+                        // 扩容后 table 的长度变成了原来的两倍，从中间切成两个数组。
+                        // j 桶中的元素也许在前半数组中，也许在后半数组中。
+                        // 所以 j 桶中的元素也能拆成两个子链表。
+
+                        // 保存将会放到前半数组中的元素。
                         Node<K,V> loHead = null, loTail = null;
+                        // 保存将会放到后半数组中的元素。
                         Node<K,V> hiHead = null, hiTail = null;
                         Node<K,V> next;
                         do {
                             next = e.next;
+                            // 如果 e 将会被保存到前半数组。
                             if ((e.hash & oldCap) == 0) {
+                                // 如果保存前半数组元素的链表是空的。
                                 if (loTail == null)
+                                    // e 是该链表的第一个节点。
                                     loHead = e;
                                 else
+                                    // 保存前半数组元素的链表非空，e 追加到该链表中。
                                     loTail.next = e;
+                                // 该链表尾指针指向 e。
                                 loTail = e;
                             }
                             else {
+                                // 如果 e 将会被保存到后半数组。
                                 if (hiTail == null)
                                     hiHead = e;
                                 else
@@ -823,18 +880,25 @@ public class HashMap<K,V> extends AbstractMap<K,V>
                                 hiTail = e;
                             }
                         } while ((e = next) != null);
+                        // 如果保存前半数组元素的链表不为空
                         if (loTail != null) {
+                            // 链表中最后一个 node 的 next 置null。(该node可能之前指向了别的node)
                             loTail.next = null;
+                            // 该链表中的数据，依旧放在原来的桶中。
                             newTab[j] = loHead;
                         }
+                        // 如果保存后半数组元素的链表不为空
                         if (hiTail != null) {
+                            // 链表中最后一个 node 的 next 置null。(该node可能之前指向了别的node)
                             hiTail.next = null;
+                            // 该链表中的数据放在后半数组中。
                             newTab[j + oldCap] = hiHead;
                         }
                     }
                 }
             }
         }
+        // 返回扩容后的 table。
         return newTab;
     }
 
