@@ -963,9 +963,13 @@ public class HashMap<K,V> extends AbstractMap<K,V>
      *         (A <tt>null</tt> return can also indicate that the map
      *         previously associated <tt>null</tt> with <tt>key</tt>.)
      */
+    // 根据 key 删除 hash 表中的某个元素
     public V remove(Object key) {
         Node<K,V> e;
+        // 计算 key 的 hash 值。
+        // e: 被删除的键值对。
         return (e = removeNode(hash(key), key, null, false, true)) == null ?
+            // 被删除的键值对的值。
             null : e.value;
     }
 
@@ -979,15 +983,29 @@ public class HashMap<K,V> extends AbstractMap<K,V>
      * @param movable if false do not move other nodes while removing
      * @return the node, or null if none
      */
+
+    /**
+     *  删除 node 的思路是这样的：
+     *  你要删除 node，得先依据 key 找到 对应的 node。
+     *  所以 代码的前半截都是在找 node。并将找到的节点临时保存在 变量 node 中。
+     *  后面要删这个node了，
+     *  1. 它可能是红黑树中的节点。红黑树删除节点好麻烦。
+     *  2. 它可能是链表中的节点，这个稍微简单些。
+     *  3. 它可能只是个单节点, table[index] == null;
+     */
+
     final Node<K,V> removeNode(int hash, Object key, Object value,
                                boolean matchValue, boolean movable) {
         Node<K,V>[] tab; Node<K,V> p; int n, index;
         if ((tab = table) != null && (n = tab.length) > 0 &&
             (p = tab[index = (n - 1) & hash]) != null) {
+            // node 用来保存被删除元素。
             Node<K,V> node = null, e; K k; V v;
             if (p.hash == hash &&
                 ((k = p.key) == key || (key != null && key.equals(k))))
+                //  元素找到了，是个单节点。
                 node = p;
+            // 待删节点可能在链表中，也可能在红黑树中。
             else if ((e = p.next) != null) {
                 if (p instanceof TreeNode)
                     node = ((TreeNode<K,V>)p).getTreeNode(hash, key);
@@ -1003,17 +1021,23 @@ public class HashMap<K,V> extends AbstractMap<K,V>
                     } while ((e = e.next) != null);
                 }
             }
+            //  待删节点到这里就找完了，可能找到了，也可能没有找到。
+            // node != null 表示待删除节点找到了。
             if (node != null && (!matchValue || (v = node.value) == value ||
                                  (value != null && value.equals(v)))) {
                 if (node instanceof TreeNode)
+                     // 是红黑树中的节点。
                     ((TreeNode<K,V>)node).removeTreeNode(this, tab, movable);
                 else if (node == p)
+                    // 是单节点，table[index] = null
                     tab[index] = node.next;
                 else
+                    // 是链表中的节点。
                     p.next = node.next;
                 ++modCount;
                 --size;
                 afterNodeRemoval(node);
+                // 将删除的节点返回。
                 return node;
             }
         }
