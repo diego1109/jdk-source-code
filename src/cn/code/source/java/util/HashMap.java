@@ -594,8 +594,11 @@ public class HashMap<K,V> extends AbstractMap<K,V>
      *
      * @see #put(Object, Object)
      */
+    // 根据键值获取元素的value。
     public V get(Object key) {
         Node<K,V> e;
+        // 计算 key 的 hashcode。
+        // 找到了就返回元素的 value，找不到返回 null。
         return (e = getNode(hash(key), key)) == null ? null : e.value;
     }
 
@@ -608,21 +611,33 @@ public class HashMap<K,V> extends AbstractMap<K,V>
      */
     final Node<K,V> getNode(int hash, Object key) {
         Node<K,V>[] tab; Node<K,V> first, e; int n; K k;
+        // 当 table 不为空，才能进到里面找元素。
+        // (n - 1) & hash : 计算待查找元素的在 table 中的位置。
+        // first = table[index]: index 位置处的第一个元素。 当这个位置上有元素时才能继续找。
         if ((tab = table) != null && (n = tab.length) > 0 &&
             (first = tab[(n - 1) & hash]) != null) {
             if (first.hash == hash && // always check first node
                 ((k = first.key) == key || (key != null && key.equals(k))))
+                //  如果 index 位置上第一个元素的 key 和 hash 与给定的 hey 和 hash 分别相同
+                // 那这就是要找的元素，将其返回。
                 return first;
+            // 如果 hash 不一样或者 key 不一样那就在 index 位置上找下一个，第一个不是我们要找的。
+            // 接下来，index 位置上的桶可能是链表，可能是红黑树。
             if ((e = first.next) != null) {
+                // 拿出下一个元素给 e
                 if (first instanceof TreeNode)
+                     // 是红黑树，按照树的规则找。
                     return ((TreeNode<K,V>)first).getTreeNode(hash, key);
                 do {
+                    // 是链表，遍历链表找
                     if (e.hash == hash &&
                         ((k = e.key) == key || (key != null && key.equals(k))))
+                        // 找到了，将其返回。
                         return e;
                 } while ((e = e.next) != null);
             }
         }
+        // 找不到，就返回 null。
         return null;
     }
 
@@ -767,7 +782,7 @@ public class HashMap<K,V> extends AbstractMap<K,V>
     // 扩容主要做了三件事情：
     // 1. 扩大容量，
     // 2. 扩大阈值，
-    // 3. 重新分布散列表中的元素。
+    // 3. 重新分布散列表中的元素(如果有)。
     final Node<K,V>[] resize() {
         // 扩容前的 table。
         Node<K,V>[] oldTab = table;
