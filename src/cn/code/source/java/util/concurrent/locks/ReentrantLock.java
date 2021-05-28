@@ -127,34 +127,54 @@ public class ReentrantLock implements Lock, java.io.Serializable {
          * subclasses, but both need nonfair try for trylock method.
          */
         final boolean nonfairTryAcquire(int acquires) {
+            // 获取当前线程
             final Thread current = Thread.currentThread();
+            // 获取 state
             int c = getState();
+            // 如果没有加锁
             if (c == 0) {
+                //  CAS 修改 state。
                 if (compareAndSetState(0, acquires)) {
+                    // 将当前线程设置成锁持有者。
                     setExclusiveOwnerThread(current);
+                    // 拿锁成功，返回。
                     return true;
                 }
             }
+            // 如果已经加锁了，再判断锁的持有者是不是当前线程。
+            // (从这里可以看出，ReectrantLock支持锁重入的)
             else if (current == getExclusiveOwnerThread()) {
+                // state 值增加。
                 int nextc = c + acquires;
                 if (nextc < 0) // overflow
                     throw new Error("Maximum lock count exceeded");
+                // 写回 state
                 setState(nextc);
+                // 拿锁成功，返回。
                 return true;
             }
+            // 拿锁失败，返回。
             return false;
         }
 
         protected final boolean tryRelease(int releases) {
+            // 这跟锁重入有关系，当 c == 0 时，才能释放成功。
+            // 比如，T0 加锁四次，getState() == 4，释放三次 releases ==3
+            // c=4-3, T0 当然不能释放成功，还有一层锁呢。
             int c = getState() - releases;
+            // 如果当前线程不是锁的持有者，抛异常。
             if (Thread.currentThread() != getExclusiveOwnerThread())
                 throw new IllegalMonitorStateException();
             boolean free = false;
+            // 当 c==0 时，锁才能释放成功。
             if (c == 0) {
                 free = true;
+                // 将同步器中锁的持有者置为 null。
                 setExclusiveOwnerThread(null);
             }
+            // CAS 修改 state = 0。
             setState(c);
+            // 返回
             return free;
         }
 
@@ -164,6 +184,7 @@ public class ReentrantLock implements Lock, java.io.Serializable {
             return getExclusiveOwnerThread() == Thread.currentThread();
         }
 
+        // 创建条件变量对象。
         final ConditionObject newCondition() {
             return new ConditionObject();
         }
@@ -203,9 +224,12 @@ public class ReentrantLock implements Lock, java.io.Serializable {
          * acquire on failure.
          */
         final void lock() {
+            //  CAS 设置 state=1
             if (compareAndSetState(0, 1))
+                //  设置 exclusiveOwnerThread = 当前线程
                 setExclusiveOwnerThread(Thread.currentThread());
             else
+                // CAS 修改 state 失败，执行这个方法。
                 acquire(1);
         }
 
@@ -331,6 +355,7 @@ public class ReentrantLock implements Lock, java.io.Serializable {
      *
      * @throws InterruptedException if the current thread is interrupted
      */
+    // 可打断的加锁方式。
     public void lockInterruptibly() throws InterruptedException {
         sync.acquireInterruptibly(1);
     }
@@ -496,7 +521,9 @@ public class ReentrantLock implements Lock, java.io.Serializable {
      *
      * @return the Condition object
      */
+    // 创建条件变量。
     public Condition newCondition() {
+        // 调用同步器，创建条件变量。
         return sync.newCondition();
     }
 
