@@ -820,6 +820,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
     /**
      * Creates a new, empty map with the default initial table size (16).
      */
+    // 使用默认容量：16.
     public ConcurrentHashMap() {
     }
 
@@ -834,11 +835,14 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
      * elements is negative
      */
     public ConcurrentHashMap(int initialCapacity) {
+        // 下限检测
         if (initialCapacity < 0)
             throw new IllegalArgumentException();
+        // cap 是大于 1.5*initialCapacity 的最小的 2^n, 最大不超过 2^30.
         int cap = ((initialCapacity >= (MAXIMUM_CAPACITY >>> 1)) ?
                    MAXIMUM_CAPACITY :
                    tableSizeFor(initialCapacity + (initialCapacity >>> 1) + 1));
+        // table 为初始化，sizeCtl > 0，sizeCtl 表示 table 的初始容量。
         this.sizeCtl = cap;
     }
 
@@ -868,6 +872,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
      * @since 1.6
      */
     public ConcurrentHashMap(int initialCapacity, float loadFactor) {
+        // 直接调用
         this(initialCapacity, loadFactor, 1);
     }
 
@@ -891,13 +896,17 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
      */
     public ConcurrentHashMap(int initialCapacity,
                              float loadFactor, int concurrencyLevel) {
+        // 下界校验。
         if (!(loadFactor > 0.0f) || initialCapacity < 0 || concurrencyLevel <= 0)
             throw new IllegalArgumentException();
+        // 线程并发的数的上限是 table 的容量。因为多了没用。
         if (initialCapacity < concurrencyLevel)   // Use at least as many bins
             initialCapacity = concurrencyLevel;   // as estimated threads
+        // 接下来是计算 sizeCtl。
         long size = (long)(1.0 + (long)initialCapacity / loadFactor);
         int cap = (size >= (long)MAXIMUM_CAPACITY) ?
             MAXIMUM_CAPACITY : tableSizeFor((int)size);
+        // 赋值。
         this.sizeCtl = cap;
     }
 
