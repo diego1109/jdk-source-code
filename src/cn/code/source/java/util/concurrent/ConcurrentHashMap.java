@@ -942,15 +942,22 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
      */
     public V get(Object key) {
         Node<K,V>[] tab; Node<K,V> e, p; int n, eh; K ek;
+        // 计算 key 的 hashcode。
         int h = spread(key.hashCode());
+        // (n - 1) & h 计算要查找的元素在哪个桶里面。
         if ((tab = table) != null && (n = tab.length) > 0 &&
             (e = tabAt(tab, (n - 1) & h)) != null) {
+            // hashcode 相等，key 值相等，说明找到了。
             if ((eh = e.hash) == h) {
                 if ((ek = e.key) == key || (ek != null && key.equals(ek)))
+                    // 直接返回 value。
                     return e.val;
             }
+            // hashcode < 0,说明 table[i] 处目前是个 ForwardingNode。
             else if (eh < 0)
+                // e.find(h, key) 去 nextTable 中去找 key 对应的 value。
                 return (p = e.find(h, key)) != null ? p.val : null;
+            // 从桶里找。
             while ((e = e.next) != null) {
                 if (e.hash == h &&
                     ((ek = e.key) == key || (ek != null && key.equals(ek))))
@@ -1043,7 +1050,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
             }
             // 到这里，说明 i 位置的桶中有元素，
             // f=table[i],f.hash == MOVED == -1，表示 table 正在扩容。
-            // 此时不允许加元素，得先协助去扩容。
+            // 此时添加元素也是白搭，所以先去协助扩容。下一次循环时，再添加元素。
             else if ((fh = f.hash) == MOVED)
                 tab = helpTransfer(tab, f);
             else {
@@ -2347,6 +2354,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
             s = sumCount();
         }
         // 检查是否需要执行扩容。如果 table 中元素总个数超过阈值，那就执行扩容。
+        // 如果添加了元素 外面的 binCount > 1，所以 check > 1。
         if (check >= 0) {
             Node<K,V>[] tab, nt; int n, sc;
             // 元素总个数超过阈值 && table 不为空 && table 容量小于 2^30。
@@ -2360,7 +2368,9 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                         sc == rs + MAX_RESIZERS || (nt = nextTable) == null ||
                         transferIndex <= 0)
                         break;
+                    // CAS 将 sizeCtl 修改成负值。表示 table 正在扩容中。
                     if (U.compareAndSwapInt(this, SIZECTL, sc, sc + 1))
+                        // 协同扩容，nt 是扩容后 table 的引用。
                         transfer(tab, nt);
                 }
                 // CAS 将 sizeCtl 修改成负值。表示 table 正在扩容中。
@@ -2448,10 +2458,16 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
      */
     private final void transfer(Node<K,V>[] tab, Node<K,V>[] nextTab) {
         int n = tab.length, stride;
+        // 先计算出每个线程处理多少个桶。
+        // 如果cpu是单核的，那不用分了，当前线程执行整个 table 的扩容。
+        // 如果不是单核的，table.length/8,然后除以 CPU 的核数，求出每个线程处理多少个桶，
+        // 每个线程处理的桶是不得低于 MIN_TRANSFER_STRIDE (16)。
         if ((stride = (NCPU > 1) ? (n >>> 3) / NCPU : n) < MIN_TRANSFER_STRIDE)
             stride = MIN_TRANSFER_STRIDE; // subdivide range
+        // 是桶扩容，不是协同扩容。
         if (nextTab == null) {            // initiating
             try {
+                // 创建临时table，容量是原来的两倍。
                 @SuppressWarnings("unchecked")
                 Node<K,V>[] nt = (Node<K,V>[])new Node<?,?>[n << 1];
                 nextTab = nt;
@@ -2459,56 +2475,86 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                 sizeCtl = Integer.MAX_VALUE;
                 return;
             }
+            // 将新建的 table 赋值给 nextTable。
             nextTable = nextTab;
+            // 保存的是老数组的长度。
             transferIndex = n;
         }
+        // 获取新表的长度。
         int nextn = nextTab.length;
+        // 创建 forwarding 节点，其 hashcode == MOVED == -1。
         ForwardingNode<K,V> fwd = new ForwardingNode<K,V>(nextTab);
         boolean advance = true;
         boolean finishing = false; // to ensure sweep before committing nextTab
+        // 又是死循环。计算当前线程该负责哪几个桶。
         for (int i = 0, bound = 0;;) {
             Node<K,V> f; int fh;
             while (advance) {
                 int nextIndex, nextBound;
+                // 老 table 中的桶迁移时，是从最右端向最左端迁移。
+                // --i , 给当前线程分了 n 个桶，下标 -1，迁移左边的桶。
                 if (--i >= bound || finishing)
                     advance = false;
                 else if ((nextIndex = transferIndex) <= 0) {
                     i = -1;
                     advance = false;
                 }
+                // 第一个扩容线程会进到这里来，nextIndex = 老数组的长度。
                 else if (U.compareAndSwapInt
                          (this, TRANSFERINDEX, nextIndex,
                           nextBound = (nextIndex > stride ?
                                        nextIndex - stride : 0))) {
+                    // 当前线程负责的桶的下界。
                     bound = nextBound;
+                    // 当前线程负责的桶的上界。 i 此时是新数组的最后一个索引。
                     i = nextIndex - 1;
+                    // 当前线程负责的是老数组中 (bound,i] 这些桶。
                     advance = false;
                 }
             }
+            // 当前线程处理完了分配给它的桶。
             if (i < 0 || i >= n || i + n >= nextn) {
                 int sc;
+                // 再判断是不是所有的线程都做完了分配给自己的桶。
+                // 如果都完成了。
                 if (finishing) {
+                    // 新 table 置为空
                     nextTable = null;
+                    // 扩容并且迁移后的 nextTab 写回老 table。
                     table = nextTab;
+                    // 扩容完了，接下来要算阈值了。
+                    // (n << 1) - (n >>> 1) == 2*n - 0.5*n == 2*n - 0.25*2*n
+                    // == (1- 0.25) * 2*n == 0.75 * 2*n。
+                    // 新的阈值 == 0.75 * 新的容量。
                     sizeCtl = (n << 1) - (n >>> 1);
                     return;
                 }
+                // 如果不是
+                // 只有当 (sc - 2) == resizeStamp(n) << RESIZE_STAMP_SHIFT 时，所有所有线程扩容执行完毕。
                 if (U.compareAndSwapInt(this, SIZECTL, sc = sizeCtl, sc - 1)) {
                     if ((sc - 2) != resizeStamp(n) << RESIZE_STAMP_SHIFT)
                         return;
+                    // 标记 finishing = true。
                     finishing = advance = true;
                     i = n; // recheck before commit
                 }
             }
+            // 如果老数组中 i 位置出元素为空，是不用处理的，也可以认为 i 位置已经处理过了。
             else if ((f = tabAt(tab, i)) == null)
+                // CAS 将 fwd 节点放在 table[i] 位置，表示已经处理过了。
                 advance = casTabAt(tab, i, null, fwd);
+            // table[i] 元素的 hashcode == -1，表示桶已经处理过了。
             else if ((fh = f.hash) == MOVED)
                 advance = true; // already processed
             else {
+                // 给 table[i] 加锁，也就是将桶锁起来。
                 synchronized (f) {
+                    // 双重验证，确保 table[i] 没有被改变。
                     if (tabAt(tab, i) == f) {
                         Node<K,V> ln, hn;
+                        // hashcode > 0，表示桶里面是链表，执行链表的迁移。
                         if (fh >= 0) {
+                            // 这块是 1.8 hashMap 链表迁移的方式。
                             int runBit = fh & n;
                             Node<K,V> lastRun = f;
                             for (Node<K,V> p = f.next; p != null; p = p.next) {
@@ -2526,6 +2572,8 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                                 hn = lastRun;
                                 ln = null;
                             }
+                            // 拆分 table 中 i 桶中的链表，
+                            // 拆成 1 个或者 2 个。
                             for (Node<K,V> p = f; p != lastRun; p = p.next) {
                                 int ph = p.hash; K pk = p.key; V pv = p.val;
                                 if ((ph & n) == 0)
@@ -2533,11 +2581,15 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                                 else
                                     hn = new Node<K,V>(ph, pk, pv, hn);
                             }
+                            // 将低位元素赋值到 newTab 的 i 桶中。
                             setTabAt(nextTab, i, ln);
+                            // 将高位元素赋值到 newTab 的 i+n 桶中。
                             setTabAt(nextTab, i + n, hn);
+                            // 设置 tab 中 i 桶已经处理过了。
                             setTabAt(tab, i, fwd);
                             advance = true;
                         }
+                        // 桶里面是树，执行树的迁移。
                         else if (f instanceof TreeBin) {
                             TreeBin<K,V> t = (TreeBin<K,V>)f;
                             TreeNode<K,V> lo = null, loTail = null;
@@ -2594,11 +2646,14 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
         CounterCell[] as = counterCells; CounterCell a;
         long sum = baseCount;
         if (as != null) {
+            // 遍历 countersCell 中的每一个元素。
             for (int i = 0; i < as.length; ++i) {
                 if ((a = as[i]) != null)
+                    // 将每个元素的 value 累加到 sum。
                     sum += a.value;
             }
         }
+        // 返回 sum。
         return sum;
     }
 
